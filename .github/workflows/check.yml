@@ -22,6 +22,8 @@ jobs:
         with:
             main-branch-name: develop
             number-of-agents: 2
+            environment-variables: |
+                CYPRESS_RECORD_KEY=${{ env.CYPRESS_RECORD_KEY }}
             parallel-commands: |
                 pnpm exec nx-cloud record -- pnpm exec nx format:check
                 pnpm e2e:ci ${{ github.ref == 'refs/heads/develop' && '--record' || '' }}
