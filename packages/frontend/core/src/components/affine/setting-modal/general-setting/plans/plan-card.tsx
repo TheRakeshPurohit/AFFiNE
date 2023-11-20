@@ -6,6 +6,7 @@ import {
   checkoutMutation,
   SubscriptionPlan,
   SubscriptionRecurring,
+  SubscriptionStatus,
   updateSubscriptionMutation,
 } from '@affine/graphql';
 import { Trans } from '@affine/i18n';
@@ -14,6 +15,7 @@ import { useMutation } from '@affine/workspace/affine/gql';
 import { DoneIcon } from '@blocksuite/icons';
 import { Button } from '@toeverything/components/button';
 import { Tooltip } from '@toeverything/components/tooltip';
+import { useAsyncCallback } from '@toeverything/hooks/affine-async-hooks';
 import { useSetAtom } from 'jotai';
 import { useAtom } from 'jotai';
 import { nanoid } from 'nanoid';
@@ -243,7 +245,10 @@ const ActionButton = ({
   const isFree = detail.plan === SubscriptionPlan.Free;
   const isCurrent =
     detail.plan === currentPlan &&
-    (isFree ? true : currentRecurring === recurring);
+    (isFree
+      ? true
+      : currentRecurring === recurring &&
+        subscription?.status === SubscriptionStatus.Active);
 
   // is current
   if (isCurrent) {
@@ -360,7 +365,7 @@ const Upgrade = ({
   }, [onSubscriptionUpdate]);
 
   const [, openPaymentDisableModal] = useAtom(openPaymentDisableAtom);
-  const upgrade = useCallback(() => {
+  const upgrade = useAsyncCallback(async () => {
     if (!runtimeConfig.enablePayment) {
       openPaymentDisableModal(true);
       return;
@@ -369,7 +374,7 @@ const Upgrade = ({
     if (newTabRef.current) {
       newTabRef.current.focus();
     } else {
-      trigger(
+      await trigger(
         { recurring, idempotencyKey },
         {
           onSuccess: data => {
@@ -402,17 +407,15 @@ const Upgrade = ({
   }, [onClose]);
 
   return (
-    <>
-      <Button
-        className={styles.planAction}
-        type="primary"
-        onClick={upgrade}
-        disabled={isMutating}
-        loading={isMutating}
-      >
-        {t['com.affine.payment.upgrade']()}
-      </Button>
-    </>
+    <Button
+      className={styles.planAction}
+      type="primary"
+      onClick={upgrade}
+      disabled={isMutating}
+      loading={isMutating}
+    >
+      {t['com.affine.payment.upgrade']()}
+    </Button>
   );
 };
 
@@ -437,8 +440,8 @@ const ChangeRecurring = ({
     mutation: updateSubscriptionMutation,
   });
 
-  const change = useCallback(() => {
-    trigger(
+  const change = useAsyncCallback(async () => {
+    await trigger(
       { recurring: to, idempotencyKey },
       {
         onSuccess: data => {
@@ -455,7 +458,11 @@ const ChangeRecurring = ({
       You are changing your <span className={styles.textEmphasis}>{from}</span>{' '}
       subscription to <span className={styles.textEmphasis}>{to}</span>{' '}
       subscription. This change will take effect in the next billing cycle, with
-      an effective date of <span className={styles.textEmphasis}>{due}</span>.
+      an effective date of{' '}
+      <span className={styles.textEmphasis}>
+        {new Date(due).toLocaleDateString()}
+      </span>
+      .
     </Trans>
   );
 
@@ -486,7 +493,7 @@ const ChangeRecurring = ({
 const SignUpAction = ({ children }: PropsWithChildren) => {
   const setOpen = useSetAtom(authAtom);
 
-  const onClickSignIn = useCallback(async () => {
+  const onClickSignIn = useCallback(() => {
     setOpen(state => ({
       ...state,
       openModal: true,

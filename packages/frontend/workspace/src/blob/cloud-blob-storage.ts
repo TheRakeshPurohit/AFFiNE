@@ -9,22 +9,26 @@ import { fetcher } from '@affine/workspace/affine/gql';
 import type { BlobStorage } from '@blocksuite/store';
 
 import { predefinedStaticFiles } from './local-static-storage';
+import { bufferToBlob } from './util';
 
 export const createCloudBlobStorage = (workspaceId: string): BlobStorage => {
   return {
     crud: {
       get: async key => {
-        const suffix = predefinedStaticFiles.includes(key)
+        const suffix = key.startsWith('/')
+          ? key
+          : predefinedStaticFiles.includes(key)
           ? `/static/${key}`
           : `/api/workspaces/${workspaceId}/blobs/${key}`;
+
         return fetchWithTraceReport(
           runtimeConfig.serverUrlPrefix + suffix
-        ).then(res => {
+        ).then(async res => {
           if (!res.ok) {
             // status not in the range 200-299
             return null;
           }
-          return res.blob();
+          return bufferToBlob(await res.arrayBuffer());
         });
       },
       set: async (key, value) => {

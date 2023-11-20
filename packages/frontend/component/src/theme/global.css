@@ -8,6 +8,10 @@
   /*transition: all 0.1s;*/
 }
 
+:root {
+  --noise-background: url(./noise.avif);
+}
+
 html,
 body,
 h1,

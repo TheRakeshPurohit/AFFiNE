@@ -50,6 +50,8 @@ type EventResponse<Data = any> =
 @WebSocketGateway({
   cors: process.env.NODE_ENV !== 'production',
   transports: ['websocket'],
+  // see: https://socket.io/docs/v4/server-options/#maxhttpbuffersize
+  maxHttpBufferSize: 1e8, // 100 MB
 })
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   protected logger = new Logger(EventsGateway.name);
@@ -81,7 +83,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() workspaceId: string,
     @ConnectedSocket() client: Socket
   ): Promise<EventResponse<{ clientId: string }>> {
-    const canWrite = await this.permissions.tryCheck(
+    const canWrite = await this.permissions.tryCheckWorkspace(
       workspaceId,
       user.id,
       Permission.Write
@@ -181,7 +183,10 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   ): Promise<{ missing: string; state?: string } | false> {
     if (!client.rooms.has(workspaceId)) {
-      const canRead = await this.permissions.tryCheck(workspaceId, user.id);
+      const canRead = await this.permissions.tryCheckWorkspace(
+        workspaceId,
+        user.id
+      );
       if (!canRead) {
         return false;
       }
@@ -266,7 +271,10 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   ): Promise<EventResponse<{ missing: string; state?: string }>> {
     if (!client.rooms.has(workspaceId)) {
-      const canRead = await this.permissions.tryCheck(workspaceId, user.id);
+      const canRead = await this.permissions.tryCheckWorkspace(
+        workspaceId,
+        user.id
+      );
       if (!canRead) {
         return {
           error: new AccessDeniedError(workspaceId),

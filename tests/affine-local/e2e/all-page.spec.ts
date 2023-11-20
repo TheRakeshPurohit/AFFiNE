@@ -4,11 +4,11 @@ import {
   checkDatePicker,
   checkDatePickerMonth,
   checkFilterName,
-  checkPagesCount,
   clickDatePicker,
   createFirstFilter,
   createPageWithTag,
   fillDatePicker,
+  getPagesCount,
   selectDateFromDatePicker,
   selectMonthFromMonthPicker,
   selectTag,
@@ -89,8 +89,7 @@ test('allow creation of filters by created time', async ({ page }) => {
   await clickNewPageButton(page);
   await clickSideBarAllPageButton(page);
   await waitForAllPagesLoad(page);
-  const pages = await page.locator('[data-testid="page-list-item"]').all();
-  const pageCount = pages.length;
+  const pageCount = await getPagesCount(page);
   expect(pageCount).not.toBe(0);
   await createFirstFilter(page, 'Created');
   await checkFilterName(page, 'after');
@@ -98,11 +97,11 @@ test('allow creation of filters by created time', async ({ page }) => {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   await checkDatePicker(page, yesterday);
-  await checkPagesCount(page, 1);
+  expect(await getPagesCount(page)).toBe(1);
   // change date
   const today = new Date();
   await fillDatePicker(page, today);
-  await checkPagesCount(page, 0);
+  expect(await getPagesCount(page)).toBe(0);
   // change filter
   await page.getByTestId('filter-name').click();
   await page.getByTestId('filler-tag-before').click();
@@ -110,7 +109,7 @@ test('allow creation of filters by created time', async ({ page }) => {
   tomorrow.setDate(tomorrow.getDate() + 1);
   await fillDatePicker(page, tomorrow);
   await checkDatePicker(page, tomorrow);
-  await checkPagesCount(page, pageCount);
+  expect(await getPagesCount(page)).toBe(pageCount);
 });
 
 test('creation of filters by created time, then click date picker to modify the date', async ({
@@ -121,8 +120,7 @@ test('creation of filters by created time, then click date picker to modify the 
   await clickNewPageButton(page);
   await clickSideBarAllPageButton(page);
   await waitForAllPagesLoad(page);
-  const pages = await page.locator('[data-testid="page-list-item"]').all();
-  const pageCount = pages.length;
+  const pageCount = await getPagesCount(page);
   expect(pageCount).not.toBe(0);
   await createFirstFilter(page, 'Created');
   await checkFilterName(page, 'after');
@@ -130,11 +128,11 @@ test('creation of filters by created time, then click date picker to modify the 
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   await checkDatePicker(page, yesterday);
-  await checkPagesCount(page, 1);
+  expect(await getPagesCount(page)).toBe(1);
   // change date
   const today = new Date();
   await selectDateFromDatePicker(page, today);
-  await checkPagesCount(page, 0);
+  expect(await getPagesCount(page)).toBe(0);
   // change filter
   await page.locator('[data-testid="filter-name"]').click();
   await page.getByTestId('filler-tag-before').click();
@@ -142,7 +140,7 @@ test('creation of filters by created time, then click date picker to modify the 
   tomorrow.setDate(tomorrow.getDate() + 1);
   await selectDateFromDatePicker(page, tomorrow);
   await checkDatePicker(page, tomorrow);
-  await checkPagesCount(page, pageCount);
+  expect(await getPagesCount(page)).toBe(pageCount);
 });
 
 test('use monthpicker to modify the month of datepicker', async ({ page }) => {
@@ -174,8 +172,7 @@ test('allow creation of filters by tags', async ({ page }) => {
   await waitForEditorLoad(page);
   await clickSideBarAllPageButton(page);
   await waitForAllPagesLoad(page);
-  const pages = await page.locator('[data-testid="page-list-item"]').all();
-  const pageCount = pages.length;
+  const pageCount = await getPagesCount(page);
   expect(pageCount).not.toBe(0);
   await createFirstFilter(page, 'Tags');
   await checkFilterName(page, 'is not empty');
@@ -188,12 +185,133 @@ test('allow creation of filters by tags', async ({ page }) => {
   await createPageWithTag(page, { title: 'Page B', tags: ['B'] });
   await clickSideBarAllPageButton(page);
   await checkFilterName(page, 'is not empty');
-  await checkPagesCount(page, pagesWithTagsCount + 2);
+  expect(await getPagesCount(page)).toBe(pagesWithTagsCount + 2);
   await changeFilter(page, 'contains all');
-  await checkPagesCount(page, pageCount + 2);
+  expect(await getPagesCount(page)).toBe(pageCount + 2);
   await selectTag(page, 'A');
-  await checkPagesCount(page, 1);
+  expect(await getPagesCount(page)).toBe(1);
   await changeFilter(page, 'does not contains all');
   await selectTag(page, 'B');
-  await checkPagesCount(page, pageCount + 1);
+  expect(await getPagesCount(page)).toBe(pageCount + 1);
+});
+
+test('enable selection and use ESC to disable selection', async ({ page }) => {
+  await openHomePage(page);
+  await waitForEditorLoad(page);
+  await clickSideBarAllPageButton(page);
+  await waitForAllPagesLoad(page);
+
+  // there should be no checkbox in the page list by default
+  expect(
+    await page
+      .locator('[data-testid="page-list-item"] [data-testid="affine-checkbox"]')
+      .count()
+  ).toBe(0);
+
+  // by clicking [data-testid="page-list-header-selection-checkbox"], checkboxes should appear
+  await page
+    .locator('[data-testid="page-list-header-selection-checkbox"]')
+    .click();
+
+  // there should be checkboxes in the page list now
+  expect(
+    await page
+      .locator('[data-testid="page-list-item"] [data-testid="affine-checkbox"]')
+      .count()
+  ).toBeGreaterThan(0);
+
+  // by ESC, checkboxes should NOT disappear (because it is too early)
+  await page.keyboard.press('Escape');
+
+  expect(
+    await page
+      .locator('[data-testid="page-list-item"] [data-testid="affine-checkbox"]')
+      .count()
+  ).toBeGreaterThan(0);
+
+  // wait for 300ms
+  await page.waitForTimeout(300);
+
+  // esc again, checkboxes should disappear
+  await page.keyboard.press('Escape');
+
+  expect(
+    await page
+      .locator('[data-testid="page-list-item"] [data-testid="affine-checkbox"]')
+      .count()
+  ).toBe(0);
+});
+
+test('select two pages and delete', async ({ page }) => {
+  await openHomePage(page);
+  await waitForEditorLoad(page);
+  await clickSideBarAllPageButton(page);
+  await waitForAllPagesLoad(page);
+
+  const pageCount = await getPagesCount(page);
+
+  // by clicking [data-testid="page-list-header-selection-checkbox"], checkboxes should appear
+  await page
+    .locator('[data-testid="page-list-header-selection-checkbox"]')
+    .click();
+
+  // select the first two pages
+  await page
+    .locator('[data-testid="page-list-item"] [data-testid="affine-checkbox"]')
+    .nth(0)
+    .click();
+
+  await page
+    .locator('[data-testid="page-list-item"] [data-testid="affine-checkbox"]')
+    .nth(1)
+    .click();
+
+  // the floating popover should appear
+  await expect(page.locator('[data-testid="floating-toolbar"]')).toBeVisible();
+  await expect(page.locator('[data-testid="floating-toolbar"]')).toHaveText(
+    '2 selected'
+  );
+
+  // click delete button
+  await page.locator('[data-testid="page-list-toolbar-delete"]').click();
+
+  // the confirm dialog should appear
+  await expect(page.getByText('Delete 2 pages?')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete' }).click();
+
+  // check the page count again
+  await page.waitForTimeout(300);
+
+  expect(await getPagesCount(page)).toBe(pageCount - 2);
+});
+
+test('select a group of items by clicking "Select All" in group header', async ({
+  page,
+}) => {
+  await openHomePage(page);
+  await waitForEditorLoad(page);
+  await clickSideBarAllPageButton(page);
+  await waitForAllPagesLoad(page);
+
+  // Select All will appear when hovering the header
+  await page.hover('[data-testid="page-list-group-header"]');
+
+  // click Select All
+  await page.getByRole('button', { name: 'Select All' }).click();
+
+  const selectedItemCount = await page
+    .locator('[data-testid="page-list-group-header"]')
+    .getAttribute('data-group-selected-items-count');
+
+  const selectedGroupItemTotalCount = await page
+    .locator('[data-testid="page-list-group-header"]')
+    .getAttribute('data-group-items-count');
+
+  expect(selectedItemCount).toBe(selectedGroupItemTotalCount);
+
+  // check the selected count is equal to the one displayed in the floating toolbar
+  await expect(page.locator('[data-testid="floating-toolbar"]')).toHaveText(
+    `${selectedItemCount} selected`
+  );
 });

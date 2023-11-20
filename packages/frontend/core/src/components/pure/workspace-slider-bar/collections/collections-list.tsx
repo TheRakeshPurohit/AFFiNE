@@ -1,4 +1,4 @@
-import { AnimatedCollectionsIcon } from '@affine/component';
+import { AnimatedCollectionsIcon, toast } from '@affine/component';
 import {
   MenuItem as SidebarMenuItem,
   MenuLinkItem as SidebarMenuLinkItem,
@@ -18,8 +18,9 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { useDroppable } from '@dnd-kit/core';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import { IconButton } from '@toeverything/components/button';
+import { useAsyncCallback } from '@toeverything/hooks/affine-async-hooks';
 import { useBlockSuitePageMeta } from '@toeverything/hooks/use-block-suite-page-meta';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { collectionsCRUDAtom } from '../../../../atoms/collections';
@@ -54,10 +55,17 @@ const CollectionRenderer = ({
 }) => {
   const [collapsed, setCollapsed] = useState(true);
   const setting = useCollectionManager(collectionsCRUDAtom);
+  const t = useAFFiNEI18N();
   const { setNodeRef, isOver } = useDroppable({
     id: `${Collections_DROP_AREA_PREFIX}${collection.id}`,
     data: {
       addToCollection: (id: string) => {
+        if (collection.allowList.includes(id)) {
+          toast(t['com.affine.collection.addPage.alreadyExists']());
+          return;
+        } else {
+          toast(t['com.affine.collection.addPage.success']());
+        }
         setting.addPage(collection.id, id).catch(err => {
           console.error(err);
         });
@@ -73,9 +81,9 @@ const CollectionRenderer = ({
     () => new Set(collection.allowList),
     [collection.allowList]
   );
-  const removeFromAllowList = useCallback(
-    (id: string) => {
-      return setting.updateCollection({
+  const removeFromAllowList = useAsyncCallback(
+    async (id: string) => {
+      await setting.updateCollection({
         ...collection,
         allowList: collection.allowList?.filter(v => v != id),
       });

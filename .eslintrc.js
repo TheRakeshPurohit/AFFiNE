@@ -58,7 +58,7 @@ const createPattern = packageName => [
 const allPackages = [
   'packages/backend/server',
   'packages/frontend/component',
-  'packages/frontend/web',
+  'packages/frontend/core',
   'packages/frontend/electron',
   'packages/frontend/graphql',
   'packages/frontend/hooks',
@@ -127,6 +127,7 @@ const config = {
     'no-constant-binary-expression': 'error',
     'no-constructor-return': 'error',
     'react/prop-types': 'off',
+    'react/jsx-no-useless-fragment': 'error',
     '@typescript-eslint/consistent-type-imports': 'error',
     '@typescript-eslint/no-non-null-assertion': 'error',
     '@typescript-eslint/no-explicit-any': 'off',
@@ -254,6 +255,12 @@ const config = {
         ],
         '@typescript-eslint/no-misused-promises': ['error'],
         'i/no-extraneous-dependencies': ['error'],
+        'react-hooks/exhaustive-deps': [
+          'warn',
+          {
+            additionalHooks: 'useAsyncCallback',
+          },
+        ],
       },
     })),
     {

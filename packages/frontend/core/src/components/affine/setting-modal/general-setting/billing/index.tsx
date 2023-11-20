@@ -22,6 +22,7 @@ import { ArrowRightSmallIcon } from '@blocksuite/icons';
 import { Skeleton } from '@mui/material';
 import { Button, IconButton } from '@toeverything/components/button';
 import { Loading } from '@toeverything/components/loading';
+import { useAsyncCallback } from '@toeverything/hooks/affine-async-hooks';
 import { useSetAtom } from 'jotai';
 import { Suspense, useCallback, useMemo, useState } from 'react';
 
@@ -31,6 +32,7 @@ import {
   type SubscriptionMutator,
   useUserSubscription,
 } from '../../../../../hooks/use-subscription';
+import { SWRErrorBoundary } from '../../../../pure/swr-error-bundary';
 import { CancelAction, ResumeAction } from '../plans/actions';
 import * as styles from './style.css';
 
@@ -66,20 +68,24 @@ export const BillingSettings = () => {
         title={t['com.affine.payment.billing-setting.title']()}
         subtitle={t['com.affine.payment.billing-setting.subtitle']()}
       />
-      <Suspense fallback={<SubscriptionSettingSkeleton />}>
-        <SettingWrapper
-          title={t['com.affine.payment.billing-setting.information']()}
-        >
-          <SubscriptionSettings />
-        </SettingWrapper>
-      </Suspense>
-      <Suspense fallback={<BillingHistorySkeleton />}>
-        <SettingWrapper
-          title={t['com.affine.payment.billing-setting.history']()}
-        >
-          <BillingHistory />
-        </SettingWrapper>
-      </Suspense>
+      <SWRErrorBoundary FallbackComponent={SubscriptionSettingSkeleton}>
+        <Suspense fallback={<SubscriptionSettingSkeleton />}>
+          <SettingWrapper
+            title={t['com.affine.payment.billing-setting.information']()}
+          >
+            <SubscriptionSettings />
+          </SettingWrapper>
+        </Suspense>
+      </SWRErrorBoundary>
+      <SWRErrorBoundary FallbackComponent={BillingHistorySkeleton}>
+        <Suspense fallback={<BillingHistorySkeleton />}>
+          <SettingWrapper
+            title={t['com.affine.payment.billing-setting.history']()}
+          >
+            <BillingHistory />
+          </SettingWrapper>
+        </Suspense>
+      </SWRErrorBoundary>
     </>
   );
 };
@@ -250,8 +256,8 @@ const PaymentMethodUpdater = () => {
   });
   const t = useAFFiNEI18N();
 
-  const update = useCallback(() => {
-    trigger(null, {
+  const update = useAsyncCallback(async () => {
+    await trigger(null, {
       onSuccess: data => {
         window.open(data.createCustomerPortal, '_blank', 'noopener noreferrer');
       },

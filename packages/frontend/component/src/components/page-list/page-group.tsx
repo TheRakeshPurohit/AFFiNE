@@ -6,14 +6,19 @@ import { EdgelessIcon, PageIcon, ToggleCollapseIcon } from '@blocksuite/icons';
 import type { PageMeta, Workspace } from '@blocksuite/store';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
-import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import { type MouseEventHandler, useCallback, useMemo, useState } from 'react';
 
 import { PagePreview } from './page-content-preview';
 import * as styles from './page-group.css';
 import { PageListItem } from './page-list-item';
-import { pageListPropsAtom, selectionStateAtom } from './scoped-atoms';
+import {
+  pageGroupCollapseStateAtom,
+  pageListPropsAtom,
+  selectionStateAtom,
+  useAtom,
+  useAtomValue,
+} from './scoped-atoms';
 import type {
   PageGroupDefinition,
   PageGroupProps,
@@ -21,7 +26,7 @@ import type {
   PageListProps,
 } from './types';
 import { type DateKey } from './types';
-import { betweenDaysAgo, withinDaysAgo } from './utils';
+import { betweenDaysAgo, shallowEqual, withinDaysAgo } from './utils';
 
 // todo: optimize date matchers
 const getDateGroupDefinitions = (key: DateKey): PageGroupDefinition[] => [
@@ -57,6 +62,7 @@ const pageGroupDefinitions = {
   createDate: getDateGroupDefinitions('createDate'),
   updatedDate: getDateGroupDefinitions('updatedDate'),
   // add more here later
+  // todo: some page group definitions maybe dynamic
 };
 
 export function pagesToPageGroups(
@@ -100,6 +106,81 @@ export function pagesToPageGroups(
   }
   return groups;
 }
+
+export const PageGroupHeader = ({ id, items, label }: PageGroupProps) => {
+  const [collapseState, setCollapseState] = useAtom(pageGroupCollapseStateAtom);
+  const collapsed = collapseState[id];
+  const onExpandedClicked: MouseEventHandler = useCallback(
+    e => {
+      e.stopPropagation();
+      e.preventDefault();
+      setCollapseState(v => ({ ...v, [id]: !v[id] }));
+    },
+    [id, setCollapseState]
+  );
+
+  const [selectionState, setSelectionActive] = useAtom(selectionStateAtom);
+  const selectedItems = useMemo(() => {
+    const selectedPageIds = selectionState.selectedPageIds ?? [];
+    return items.filter(item => selectedPageIds.includes(item.id));
+  }, [items, selectionState.selectedPageIds]);
+
+  const allSelected = selectedItems.length === items.length;
+
+  const onSelectAll = useCallback(() => {
+    // also enable selection active
+    setSelectionActive(true);
+
+    const nonCurrentGroupIds =
+      selectionState.selectedPageIds?.filter(
+        id => !items.map(item => item.id).includes(id)
+      ) ?? [];
+
+    const newSelectedPageIds = allSelected
+      ? nonCurrentGroupIds
+      : [...nonCurrentGroupIds, ...items.map(item => item.id)];
+
+    selectionState.onSelectedPageIdsChange?.(newSelectedPageIds);
+  }, [setSelectionActive, selectionState, allSelected, items]);
+
+  const t = useAFFiNEI18N();
+
+  return label ? (
+    <div
+      data-testid="page-list-group-header"
+      className={styles.header}
+      data-group-id={id}
+      data-group-items-count={items.length}
+      data-group-selected-items-count={selectedItems.length}
+    >
+      <div
+        role="button"
+        onClick={onExpandedClicked}
+        data-testid="page-list-group-header-collapsed-button"
+        className={styles.collapsedIconContainer}
+      >
+        <ToggleCollapseIcon
+          className={styles.collapsedIcon}
+          data-collapsed={!!collapsed}
+        />
+      </div>
+      <div className={styles.headerLabel}>{label}</div>
+      {selectionState.selectionActive ? (
+        <div className={styles.headerCount}>
+          {selectedItems.length}/{items.length}
+        </div>
+      ) : null}
+      <div className={styles.spacer} />
+      <button className={styles.selectAllButton} onClick={onSelectAll}>
+        {t[
+          allSelected
+            ? 'com.affine.page.group-header.clear'
+            : 'com.affine.page.group-header.select-all'
+        ]()}
+      </button>
+    </div>
+  ) : null;
+};
 
 export const PageGroup = ({ id, items, label }: PageGroupProps) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -173,7 +254,7 @@ export const PageGroup = ({ id, items, label }: PageGroupProps) => {
 // todo: optimize how to render page meta list item
 const requiredPropNames = [
   'blockSuiteWorkspace',
-  'clickMode',
+  'rowAsLink',
   'isPreferredEdgeless',
   'pageOperationsRenderer',
   'selectedPageIds',
@@ -185,13 +266,17 @@ type RequiredProps = Pick<PageListProps, (typeof requiredPropNames)[number]> & {
   selectable: boolean;
 };
 
-const listPropsAtom = selectAtom(pageListPropsAtom, props => {
-  return Object.fromEntries(
-    requiredPropNames.map(name => [name, props[name]])
-  ) as RequiredProps;
-});
+const listPropsAtom = selectAtom(
+  pageListPropsAtom,
+  props => {
+    return Object.fromEntries(
+      requiredPropNames.map(name => [name, props[name]])
+    ) as RequiredProps;
+  },
+  shallowEqual
+);
 
-const PageMetaListItemRenderer = (pageMeta: PageMeta) => {
+export const PageMetaListItemRenderer = (pageMeta: PageMeta) => {
   const props = useAtomValue(listPropsAtom);
   const { selectionActive } = useAtomValue(selectionStateAtom);
   return (
@@ -247,10 +332,10 @@ function pageMetaToPageItemProp(
       ? new Date(pageMeta.updatedDate)
       : undefined,
     to:
-      props.clickMode === 'link'
+      props.rowAsLink && !props.selectable
         ? `/workspace/${props.blockSuiteWorkspace.id}/${pageMeta.id}`
         : undefined,
-    onClick: props.clickMode === 'select' ? toggleSelection : undefined,
+    onClick: props.selectable ? toggleSelection : undefined,
     icon: props.isPreferredEdgeless?.(pageMeta.id) ? (
       <EdgelessIcon />
     ) : (
